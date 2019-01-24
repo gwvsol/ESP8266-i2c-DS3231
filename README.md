@@ -1,38 +1,75 @@
 ## RTS DS3231 работа с NTP и времеными зонами
 
-За основу данной библиотеки была взята [ds3231_port.py](https://github.com/peterhinch/micropython-samples/blob/master/DS3231/ds3231_port.py).
-
-Дополнительный функционал который имеет данная библиотека:
-1. Обновление времени с NTP сервера (для этого используется немного измененная библиотека [timezone](https://github.com/gwvsol/ESP8266-TimeZone))
+Функционал который имеет библиотека:
+1. Обновление времени с NTP сервера (для этого используется библиотека [timezone](https://github.com/gwvsol/ESP8266-TimeZone))
 2. Поддержка временных зон и перехода с летнего времени на зимнее
-3. Использование асинхронной библиотеки uasyncio позволило реализовать автоматический переход с летнего на зимнее время
 
-Если нет необходимости обноления времени с NTP сервера, можно использовать локальное время микроконтроллера. Для этого необходимо:
+Для работы с библиотекой:
 ```python
-rtc = DS3231(i2c, 0x68, 3, True, 'local')
+from machine import I2C, Pin
+from i2c_ds3231 import DS3231
+i2c = I2C(scl=Pin(14), sda=Pin(12), freq=400000)
+rtc = DS3231(i2c, 0x68, zone=3)
 ```
-Для поддержки обновления времени с NTP:
+Вывод времени с ds3231:
 ```python
-rtc = DS3231(i2c, 0x68, 3, True, 'ntp')
+rtc.datetime()
 ```
-Вызов метода обновляет время
+Запись нового значения времени
 ```python
-rtc.save_time()
+rtc.datetime((2019, 1, 13, 19, 0, 48, 6, 0))
 ```
-При вызове метода с параметром True сбрасывает время до (2000, 0, 0, 0, 0, 0, 0, 0) это удобно использовать при отладке кода
+Сбрас времени до (2000, 1, 1, 0, 0, 0, 0, 0) это удобно использовать при отладке кода
 ```python
-rtc.save_time(True)
+rtc.datetime('reset')
+```
+
+Обновление времени с NTP сервера
+```python
+rtc.settime('ntp')
+```
+
+Обновление времени с часов микроконтроллера
+```python
+rtc.settime('esp')
+```
+
+Обновление времени с летнего на зимнее и обратно
+```python
+rtc.settime('dht')
+или
+rtc.settime()
 ```
 
 ***Пример использования:***
 ```python
 from machine import I2C, Pin
-import time
 from i2c_ds3231 import DS3231
-i2c = I2C(scl=Pin(5), sda=Pin(4), freq=400000)
-rtc = DS3231(i2c, 0x68, 3, True, 'ntp')
-rtc.save_time(True) #(2000, 1, 1, 0, 0, 0, 0, 0)
-rtc.save_time()     #(2018, 11, 8, 19, 29, 45, 3, 0)
-rtc.rtctime()       #Считываение времени с ds3231
-time.localtime()
+i2c = I2C(scl=Pin(14), sda=Pin(12), freq=400000)
+rtc = DS3231(i2c, 0x68, zone=3)
+rtc.datetime()
+(2000, 1, 1, 0, 9, 30, 5, 0)
+rtc.settime('ntp')
+Get UTC time from NTP server...
+TIME ZONE Winter: 2
+RTC: Old Time: 2000-01-01 00:09:59
+RTC: New Time: 2019-01-24 12:47:19
+```
+```python
+async def _dataupdate(self):
+        while True:
+            self.config['RTC_TIME'] = self.rtc.datetime()
+            rtc = self.config['RTC_TIME']
+            #Проверка летнего или зименего времени каждую минуту в 30с
+            if rtc[5] == 30: 
+                self.rtc.settime('dht')
+            #Если у нас режим подключения к точке доступа и если есть соединение, подводим часы по NTP
+            if self.config['MODE_WiFi'] == 'ST' and not self.config['no_wifi']:
+                #Подводка часов по NTP каждые сутки в 22:00:00
+                if rtc[3] == 22 and rtc[4] == 0 and rtc[5] < 3 and self.config['NTP_UPDATE']:
+                        self.config['NTP_UPDATE'] = False
+                        self.rtc.settime('ntp')
+                        await asyncio.sleep(1)
+                        self.config['NTP_UPDATE'] = True
+            await asyncio.sleep(1)
 ```
