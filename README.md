@@ -50,10 +50,10 @@ rtc = DS3231(i2c, 0x68, zone=3)
 rtc.datetime()
 (2000, 1, 1, 0, 9, 30, 5, 0)
 rtc.settime('ntp')
-Get UTC time from NTP server...
-TIME ZONE Winter: 2
-RTC: Old Time: 2000-01-01 00:09:59
-RTC: New Time: 2019-01-24 12:47:19
+#Get UTC time from NTP server...
+#TIME ZONE Winter: 2
+#RTC: Old Time: 2000-01-01 00:09:59
+#RTC: New Time: 2019-01-24 12:47:19
 ```
 ```python
 async def _dataupdate(self):
