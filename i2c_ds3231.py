@@ -3,6 +3,7 @@ import time
 import gc
 from timezone import TZONE
 
+
 #Registers overview
 _SECONDS = const(0x00)
 _MINUTES = const(0x01)
@@ -12,30 +13,28 @@ _DATE = const(0x04)  #Bit0-5
 _MONTH = const(0x05) #Bit0-4 - Month, Bit7 - Century
 _YEAR = const(0x06)
 
+
 class DS3231(object):
 
-    def __init__(self, i2c, i2c_addr, zone=0, zone=0, dht=True):
+    def __init__(self, i2c, i2c_addr, zone=0, dht=True):
         self.i2c = i2c
         self.i2c_addr = i2c_addr
-        self.timebuf = bytearray(7)
         self.zone = zone
         self.dht = dht
         self.block = False
-        self.tzone = TZONE(self.zone)
         self.rtc = False
         if self.i2c_addr in self.i2c.scan():
-            print('RTS DS3231 find at address: 0x%x ' %(self.i2c_addr))
+            print('RTC: DS3231 find at address: 0x%x ' %(self.i2c_addr))
         else:
-            print('RTS DS3231 not found at address: 0x%x ' %(self.i2c_addr))
+            print('RTC: DS3231 not found at address: 0x%x ' %(self.i2c_addr))
         gc.collect()
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._update_time())
 
     #Преобразование двоично-десятичного формата
     def _bcd2dec(self, bcd):
         """Convert binary coded decimal (BCD) format to decimal"""
         return (((bcd & 0xf0) >> 4) * 10 + (bcd & 0x0f))
+
 
     #Преобразование в двоично-десятичный формат
     def _dec2bcd(self, dec):
@@ -110,15 +109,16 @@ class DS3231(object):
     def settime(self, source='dht'):
         z = 0
         utc = self.datetime()
+        tzone = TZONE(self.zone)
         if  source == 'esp': #Устанавливаем время с часов ESP8266
             utc = time.localtime()
         elif source == 'ntp': #Устанавливаем время c NTP сервера
-            utc = time.localtime(self.tzone.getntp()) #Время с NTP без учета летнего или зимнего времени
-            z = self.tzone.adj_tzone(utc) if self.dht else 0 #Корректируем время по временным зонам
+            utc = time.localtime(tzone.getntp()) #Время с NTP без учета летнего или зимнего времени
+            z = tzone.adj_tzone(utc) if self.dht else 0 #Корректируем время по временным зонам
         elif source == 'dht' and not self.block: #Только первод времени в DS3231, если нет блокировки
             rtc = self.datetime()
             # Если время 3часа утра и последнее воскресенье месяца
-            if rtc[3] == 3 and self.tzone.sunday(rtc[0], rtc[1]) == rtc[2] and rtc[4] <= 2:
+            if rtc[3] == 3 and tzone.sunday(rtc[0], rtc[1]) == rtc[2] and rtc[4] <= 2:
                 # Если март
                 if rtc[1] == 3:
                     z = 1 if self.dht else 0 #Переводим время вперед
@@ -156,3 +156,14 @@ class DS3231(object):
         #else: #Если разница во времени не обнаружена, выводим время с DS3231
         #    print('RTC: No time change: {:0>2d}-{:0>2d}-{:0>2d} {:0>2d}:{:0>2d}:{:0>2d}'\
         #    .format(yy, MM, mday, hh, mm, ss))
+
+
+    @property
+    def set_zone(self):
+        """Установка временной зоны в процессе работы"""
+        return self.zone
+        
+    @set_zone.setter
+    def set_zone(self, timez):
+        """Сеттер для установки звременной зоны в процессе работы"""
+        self.zone = timez

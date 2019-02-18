@@ -41,6 +41,12 @@ rtc.settime('dht')
 rtc.settime()
 ```
 
+В процессе работы возможно изменение временной зоны, для этого в библиотеке используется setter
+```python
+new_time_zone = 2
+rtc.set_zone = new_time_zone
+```
+
 ***Пример использования:***
 ```python
 from machine import I2C, Pin
