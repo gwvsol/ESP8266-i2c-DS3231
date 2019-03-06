@@ -1,10 +1,18 @@
 ## RTS DS3231 работа с NTP и времеными зонами
 
+[![micropython](https://user-images.githubusercontent.com/13176091/53680744-4dfcc080-3ce8-11e9-94e1-c7985181d6a5.png)](https://micropython.org/)
+
 Функционал который имеет библиотека:
 1. Обновление времени с NTP сервера (для этого используется библиотека [timezone](https://github.com/gwvsol/ESP8266-TimeZone))
 2. Поддержка временных зон и перехода с летнего времени на зимнее
 
-Для работы с библиотекой:
+### Схема включения DS3231
+
+![schematic_esp8266-ds3231-rtc](https://user-images.githubusercontent.com/13176091/53881510-8cfa8100-401c-11e9-81d5-794e937b4583.png)
+
+***
+
+Работа с библиотекой:
 ```python
 from machine import I2C, Pin
 from i2c_ds3231 import DS3231
