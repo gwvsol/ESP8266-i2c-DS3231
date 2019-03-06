@@ -1,7 +1,8 @@
 from micropython import const
-import time
-import gc
+from time import localtime, mktime
+from gc import collect
 from timezone import TZONE
+collect()
 
 
 #Registers overview
@@ -27,7 +28,7 @@ class DS3231(object):
             print('RTC: DS3231 find at address: 0x%x ' %(self.i2c_addr))
         else:
             print('RTC: DS3231 not found at address: 0x%x ' %(self.i2c_addr))
-        gc.collect()
+        collect()
 
 
     #Преобразование двоично-десятичного формата
@@ -104,19 +105,20 @@ class DS3231(object):
                 self.i2c.writeto_mem(self.i2c_addr, _YEAR, self._tobytes(self._dec2bcd(yy-1900)))
             (yy, MM, mday, hh, mm, ss, wday, yday) = self.datetime() #Cчитываем записанное новое значение времени с DS3231
             print('RTC: New Time: %02d-%02d-%02d %02d:%02d:%02d' %(yy, MM, mday, hh, mm, ss)) #Выводим новое время DS3231
+            collect()
 
 
     def settime(self, source='dht'):
-        z = 0
         utc = self.datetime()
         tzone = TZONE(self.zone)
-        if  source == 'esp': #Устанавливаем время с часов ESP8266
-            utc = time.localtime()
-        elif source == 'ntp': #Устанавливаем время c NTP сервера
-            utc = time.localtime(tzone.getntp()) #Время с NTP без учета летнего или зимнего времени
-            z = tzone.adj_tzone(utc) if self.dht else 0 #Корректируем время по временным зонам
-        elif source == 'dht' and not self.block: #Только первод времени в DS3231, если нет блокировки
-            rtc = self.datetime()
+        if  source == 'esp': # Устанавливаем время с часов ESP8266
+            utc = localtime()
+        elif source == 'ntp': # Устанавливаем время c NTP сервера
+            ntp = tzone.getntp() # Время с NTP без учета летнего или зимнего времени в секундах начиная с 2000г
+            z = tzone.adj_tzone(localtime(ntp)) if self.dht else 0 # Корректируем время по временным зонам
+            utc = localtime(ntp + (3600 * z))
+        elif source == 'dht' and not self.block: # Только первод времени в DS3231, если нет блокировки
+            rtc = utc
             # Если время 3часа утра и последнее воскресенье месяца
             if rtc[3] == 3 and tzone.sunday(rtc[0], rtc[1]) == rtc[2] and rtc[4] <= 2:
                 # Если март
@@ -125,6 +127,7 @@ class DS3231(object):
                 #Если октябрь
                 elif rtc[1] == 10:
                     z = -1 if self.dht else 0 #Переводим время назад
+                utc = localtime(mktime(rtc) + (3600 * z))
                 self.block = True #Устанавливаем блокировку на изменение времени
         rtc = self.datetime() #Cчитываем значение времени с DS3231
         #Блокировка перевода времени. Если октябрь, блокировка на 1час 3минуты
@@ -143,19 +146,19 @@ class DS3231(object):
                 self.block = False
         else: #Во всех остальных случаях блокировка снимается
             self.block = False
-        (yy, MM, mday, hh, mm, ss, wday, yday) =  utc[0:3] + (utc[3]+z,) + utc[4:7] + (utc[7],)
         #Если существует разница во времени, применяем изменения
-        if source == 'dht' and rtc[3] != hh:
+        if source == 'dht' and rtc[3] != utc[3]:
             print('RTC: Old Time: {:0>2d}-{:0>2d}-{:0>2d} {:0>2d}:{:0>2d}:{:0>2d}'\
             .format(rtc[0], rtc[1], rtc[2], rtc[3], rtc[4], rtc[5]))
-            self.datetime((yy, MM, mday, hh, mm, ss, wday, yday))
-        elif source == 'esp' or source == 'ntp' or rtc[3] != hh or rtc[4] != mm or rtc[5] != ss:
+            self.datetime(utc)
+        elif source == 'esp' or source == 'ntp' or rtc[3] != utc[3] or rtc[4] != utc[4] or rtc[5] != utc[5]:
             print('RTC: Old Time: {:0>2d}-{:0>2d}-{:0>2d} {:0>2d}:{:0>2d}:{:0>2d}'\
             .format(rtc[0], rtc[1], rtc[2], rtc[3], rtc[4], rtc[5]))
-            self.datetime((yy, MM, mday, hh, mm, ss, wday, yday))
+            self.datetime(utc)
         #else: #Если разница во времени не обнаружена, выводим время с DS3231
         #    print('RTC: No time change: {:0>2d}-{:0>2d}-{:0>2d} {:0>2d}:{:0>2d}:{:0>2d}'\
         #    .format(yy, MM, mday, hh, mm, ss))
+        collect()
 
 
     @property
